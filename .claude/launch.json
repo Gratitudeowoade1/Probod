@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ProdBod Dev",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["/Users/emmanueladedeji/Desktop/prodbod/node_modules/.bin/vite", "--port", "8080", "--force"],
+      "port": 8080
+    }
+  ]
+}
