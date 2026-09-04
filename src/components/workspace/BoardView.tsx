@@ -1,99 +1,216 @@
-import { useState } from 'react';
-import { DndContext, DragEndEvent, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Feature, useUpdateWorkspaceFeature } from '@/hooks/useWorkspaceFeatures';
-import { ProductStatus } from '@/types/productStatus';
-import { BoardColumn } from './BoardColumn';
-import { InlineAddRow } from './InlineAddRow';
+import React from 'react';
+import PhosphorIcon from '@/components/icons/PhosphorIcons';
+import {
+  WorkspaceFeatureItem,
+  WorkspaceTask,
+  PhaseKey,
+  PHASE_META,
+  PHASE_ORDER,
+} from '@/types/workspace';
+import { CategoryChip, TagChip, AssigneeStack } from './Chips';
 
 interface BoardViewProps {
-  features: Feature[];
-  listId: string;
-  productId: string;
-  orgId: string;
-  onOpenDetail: (f: Feature) => void;
-  productStatuses: ProductStatus[];
+  features: WorkspaceFeatureItem[];
+  selectedItemId: string | null;
+  onSelectItem: (id: string, kind: 'feature' | 'task', parentFeatureId?: string) => void;
 }
 
-export function BoardView({ features, listId, productId, orgId, onOpenDetail, productStatuses }: BoardViewProps) {
-  const updateFeature = useUpdateWorkspaceFeature();
-  const [addingStatusId, setAddingStatusId] = useState<string | null>(null);
+export function BoardView({ features, selectedItemId, onSelectItem }: BoardViewProps) {
+  // Flatten features and tasks per phase
+  const getItemsForPhase = (phaseKey: PhaseKey) => {
+    const out: Array<{
+      id: string;
+      title: string;
+      kind: 'feature' | 'task';
+      category?: string;
+      tags?: string[];
+      assignees?: string[];
+      endDate?: string | null;
+      parentFeatureId?: string;
+    }> = [];
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
+    features
+      .filter((f) => f.phase === phaseKey)
+      .forEach((f) => {
+        out.push({
+          id: f.id,
+          title: f.title,
+          kind: 'feature',
+          tags: f.tags,
+          assignees: f.assignees,
+          endDate: f.endDate,
+        });
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
+        (f.tasks || [])
+          .filter((t) => t.phase === phaseKey)
+          .forEach((t) => {
+            out.push({
+              id: t.id,
+              title: t.title,
+              kind: 'task',
+              category: t.category,
+              tags: t.tags,
+              assignees: t.assignees,
+              endDate: t.endDate,
+              parentFeatureId: f.id,
+            });
+          });
+      });
 
-    const featureId = active.id as string;
-    const newStatusId = over.id as string;
-
-    // Confirm it's a valid status column
-    const isStatusColumn = productStatuses.some(s => s.id === newStatusId);
-    if (!isStatusColumn) return;
-
-    const feature = features.find(f => f.id === featureId);
-    if (!feature || feature.status_id === newStatusId) return;
-
-    try {
-      await updateFeature.mutateAsync({ id: featureId, status_id: newStatusId });
-    } catch (err) {
-      console.error('Failed to update feature status:', err);
-    }
+    return out;
   };
 
-  // Only show L1 features in board (parent_id = null)
-  const l1Features = features.filter(f => f.parent_id === null && f.level === 'feature');
-  const featuresByStatus = (statusId: string) => l1Features.filter(f => f.status_id === statusId);
-
-  // Sort statuses: not_started → active → done → closed
-  const orderedStatuses = [...productStatuses].sort((a, b) => {
-    const catOrder = ['not_started', 'active', 'done', 'closed'];
-    const catDiff = catOrder.indexOf(a.category) - catOrder.indexOf(b.category);
-    if (catDiff !== 0) return catDiff;
-    return a.position - b.position;
-  });
-
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          padding: '16px 20px',
-          overflowX: 'auto',
-          height: '100%',
-          alignItems: 'flex-start',
-          fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
-        {orderedStatuses.map(s => (
-          <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            <BoardColumn
-              status={s}
-              features={featuresByStatus(s.id)}
-              onAddFeature={(statusId) => setAddingStatusId(statusId)}
-              onOpenDetail={onOpenDetail}
-            />
-            {addingStatusId === s.id && (
-              <div style={{ marginTop: 4 }}>
-                <InlineAddRow
-                  listId={listId}
-                  productId={productId}
-                  orgId={orgId}
-                  defaultStatusId={s.id}
-                  level="feature"
-                  parentId={null}
-                  position={featuresByStatus(s.id).length}
-                  onDone={() => setAddingStatusId(null)}
-                  onCancel={() => setAddingStatusId(null)}
-                />
+    <div
+      style={{
+        display: 'flex',
+        gap: 16,
+        padding: '16px 24px 40px 24px',
+        overflowX: 'auto',
+        background: 'var(--pb-bg-surface)',
+        minHeight: 'calc(100vh - 140px)',
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      {PHASE_ORDER.map((phaseKey) => {
+        const meta = PHASE_META[phaseKey];
+        const items = getItemsForPhase(phaseKey);
+
+        return (
+          <div
+            key={phaseKey}
+            style={{
+              minWidth: 270,
+              maxWidth: 270,
+              background: '#faf9f7',
+              borderRadius: 12,
+              padding: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              flexShrink: 0,
+            }}
+          >
+            {/* Column Head */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 10,
+                padding: '0 4px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '5px 11px',
+                  borderRadius: 20,
+                  background: meta.bg,
+                  color: meta.color,
+                }}
+              >
+                <PhosphorIcon name={meta.icon} size={12} />
+                <span>{meta.label}</span>
               </div>
-            )}
+              <div style={{ fontSize: 12, color: 'var(--pb-text-faint)', fontWeight: 600 }}>
+                {items.length}
+              </div>
+            </div>
+
+            {/* Cards List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, flex: 1 }}>
+              {items.map((it) => {
+                const isSelected = selectedItemId === it.id;
+                return (
+                  <div
+                    key={it.id}
+                    onClick={() => onSelectItem(it.id, it.kind, it.parentFeatureId)}
+                    style={{
+                      background: '#fff',
+                      border: isSelected ? '1.5px solid var(--pb-accent-blue)' : '1px solid var(--pb-border)',
+                      borderRadius: 10,
+                      padding: 12,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      boxShadow: isSelected ? '0 0 0 2px rgba(76,125,240,0.15)' : 'none',
+                      transition: 'box-shadow .15s, transform .12s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,.06)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.transform = 'none';
+                      }
+                    }}
+                  >
+                    <div style={{ color: 'var(--pb-text)', lineHeight: 1.4 }}>{it.title}</div>
+
+                    {/* Tags / Category */}
+                    {(it.category || (it.tags || []).length > 0) && (
+                      <div style={{ display: 'flex', gap: 5, marginTop: 8, flexWrap: 'wrap' }}>
+                        {it.category && <CategoryChip category={it.category} />}
+                        {(it.tags || []).map((t) => (
+                          <TagChip key={t} tag={t} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Footer: Assignees & Due Date */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 10,
+                      }}
+                    >
+                      <AssigneeStack assignees={it.assignees || []} />
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: 'var(--pb-text-faint)',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        {it.endDate && <PhosphorIcon name="calendar" size={11} />}
+                        <span>{it.endDate || ''}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {items.length === 0 && (
+                <div
+                  style={{
+                    padding: '24px 12px',
+                    textAlign: 'center',
+                    fontSize: 12,
+                    color: 'var(--pb-text-faint)',
+                    border: '1px dashed var(--pb-border)',
+                    borderRadius: 8,
+                  }}
+                >
+                  No items in {meta.label}
+                </div>
+              )}
+            </div>
           </div>
-        ))}
-      </div>
-    </DndContext>
+        );
+      })}
+    </div>
   );
 }

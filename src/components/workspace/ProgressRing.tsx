@@ -1,44 +1,51 @@
+import React from 'react';
+
 interface ProgressRingProps {
-  percentage: number;   // 0–100
-  size?: number;        // px (default 20)
-  strokeWidth?: number; // px (default 2.5)
-  color?: string;       // hex or CSS color
+  pct: number;
+  color?: string;
+  size?: number;
 }
 
-export function ProgressRing({ percentage, size = 20, strokeWidth = 2.5, color = '#8b5cf6' }: ProgressRingProps) {
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = Math.max(0, Math.min(1, percentage / 100)) * circ;
+export const ProgressRing: React.FC<ProgressRingProps> = ({
+  pct,
+  color = '#7c5cf0',
+  size = 16,
+}) => {
+  const r = 6;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.min(100, Math.max(0, pct)) / 100) * c;
 
   return (
     <svg
+      className="progress-ring"
       width={size}
       height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      style={{ flexShrink: 0, transform: 'rotate(-90deg)' }}
-      aria-label={`${percentage}% complete`}
+      viewBox="0 0 16 16"
+      style={{ flexShrink: 0 }}
     >
-      {/* Background track */}
       <circle
-        cx={size / 2}
-        cy={size / 2}
+        cx="8"
+        cy="8"
         r={r}
         fill="none"
-        stroke="var(--pb-border2)"
-        strokeWidth={strokeWidth}
+        stroke="#eceae4"
+        strokeWidth="2"
       />
-      {/* Progress arc */}
       <circle
-        cx={size / 2}
-        cy={size / 2}
+        cx="8"
+        cy="8"
         r={r}
         fill="none"
         stroke={color}
-        strokeWidth={strokeWidth}
+        strokeWidth="2"
+        strokeDasharray={c}
+        strokeDashoffset={offset}
         strokeLinecap="round"
-        strokeDasharray={`${dash} ${circ}`}
-        style={{ transition: 'stroke-dasharray 300ms ease' }}
+        transform="rotate(-90 8 8)"
+        style={{ transition: 'stroke-dashoffset 0.3s ease' }}
       />
     </svg>
   );
-}
+};
+
+export default ProgressRing;

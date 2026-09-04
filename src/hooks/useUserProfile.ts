@@ -27,15 +27,23 @@ export function useUserProfile() {
     queryKey: ['user-profile'],
     staleTime: 0,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data as UserProfile | null;
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) return null;
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (error) {
+          console.warn('Error fetching user profile:', error.message);
+          return null;
+        }
+        return data as UserProfile | null;
+      } catch (err) {
+        console.warn('Failed to load user profile:', err);
+        return null;
+      }
     },
   });
 }
